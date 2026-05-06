@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gatinhos bonitinhos</title>
+    <style>
+        body {
+            background-color: rgb(154, 199, 96);
+            font-family: Arial, Helvetica, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        h1 {
+            color:rgb(0, 0, 0);
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: olivedrab;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 20px;
+        }
+        button:hover{
+            background-color: rgb(71, 112, 24);
+        }
+        #imagem {
+           max-width: 500px;
+           border-radius: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>≽ܫ≼ Galeria de Gatos ≽ܫ≼</h1>
+    <p>ฅᨐฅ Clique no botão para ver um gatinho bonitinho! ฅᨐฅ</p>
+    <button id="botao">𑄝 Mostrar gatinho 𑄝</button>
+    <br>
+    <img id="imagem" src="" width="400" style="display: none">
+<script>
+     const botao = document.getElementById('botao');
+     const imagem = document.getElementById('imagem');
+
+     botao.addEventListener('click', function() {
+        console.log('Botão clicado!Meow a caminho...')
+        fetch('https://api.thecatapi.com/v1/images/search')
+
+        .then(function(resposta){
+            console.log('Resposta HTTP recebida!');
+            console.log('Status Code:', resposta.status); //200
+            console.log('Headers:', resposta.headers);
+            return resposta.json();
+        })
+        .then(function(dados){
+            console.log('Dados extraídos (JSON - Objeto JS):', dados);
+            
+            const urlDoGato = dados[0].url;
+            console.log('URL da imagem:', urlDoGato);
+
+            imagem.src = urlDoGato;
+            imagem.style.display = 'block';
+
+            console.log('Imagem carregada com sucesso!')
+        });
+        });
+</script>
+</body>
+</html>

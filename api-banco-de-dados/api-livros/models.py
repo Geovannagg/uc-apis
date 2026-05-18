@@ -8,7 +8,7 @@ class Livro(Base):
     id = Column(Integer, primary_key=True, index=True)
     titulo = Column(String(100), nullable=False)
     autor = Column(String(100), nullable=False)
-    ano_publicação = Column(Integer)
+    ano_publicacao = Column(Integer, default=0)
     disponivel = Column(Boolean, default=True)
     criado_em = Column(DateTime(timezone=True), server_default=func.now())
 

@@ -4,7 +4,7 @@ from typing import List
 
 from database import engine, Base, get_db
 from models   import Aluno
-from schemas  import AlunoCreate, AlunoPatch, AlunoResponse
+from schemas  import AlunoCreate, AlunoPatch, AlunoResponse, ErroResponse
 
 Base.metadata.create_all(bind=engine)
 
@@ -15,7 +15,7 @@ app = FastAPI(
 )
 
 @app.post('/alunos',
-          response_model=AlunoResponse, status_code=201, responses={409: {'model': AlunoResponse}})
+          response_model=AlunoResponse, status_code=201, responses={409: {'model': ErroResponse}})
 def criar_aluno(dados: AlunoCreate, db: Session = Depends(get_db)):
     existe = db.query(Aluno).filter(Aluno.email == dados.email).first()
     if existe:

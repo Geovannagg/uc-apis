@@ -4,7 +4,7 @@ from typing import List
 
 from database import engine, Base, get_db
 from models   import Aluno
-from schemas  import AlunoCreate, AlunoPatch, AlunoResponse, ErroResponse
+from schemas  import AlunoCreate, AlunoPatch, AlunoResponse
 
 Base.metadata.create_all(bind=engine)
 
@@ -15,10 +15,8 @@ app = FastAPI(
 )
 
 @app.post('/alunos',
-          response_model=AlunoResponse,
-          status_code=201,
-          responses={409: {'model': ErroResponse}})
-def matricular_aluno(dados: AlunoCreate, db: Session = Depends(get_db)):
+          response_model=AlunoResponse, status_code=201, responses={409: {'model': AlunoResponse}})
+def criar_aluno(dados: AlunoCreate, db: Session = Depends(get_db)):
     existe = db.query(Aluno).filter(Aluno.email == dados.email).first()
     if existe:
         raise HTTPException(
@@ -31,6 +29,7 @@ def matricular_aluno(dados: AlunoCreate, db: Session = Depends(get_db)):
         email = dados.email,
         matricula = dados.matricula,
         nota_final = dados.nota_final,
+        ativo = True
     )
     db.add(aluno)
     db.commit()
@@ -60,6 +59,16 @@ def atualizar_aluno(aluno_id: int, dados: AlunoPatch, db: Session = Depends(get_
 
     if dados.nome  is not None: aluno.nome  = dados.nome
     if dados.email is not None: aluno.email = dados.email
+    if dados.nota_final is not None: aluno.nota_final = dados.nota_final
     db.commit()
     db.refresh(aluno)
     return aluno
+
+@app.delete('/alunos/{aluno_id}')
+def remover_aluno(aluno_id: int, db: Session = Depends(get_db)):
+    aluno = db.query(Aluno).filter(Aluno.id == aluno_id).first()
+    if not aluno or not aluno.ativo:
+        raise HTTPException(status_code=404, detail='Aluno não encontrado')
+    aluno.ativo = False
+    db.commit()
+    return {'mensagem': f'Aluno {aluno_id} removido'}

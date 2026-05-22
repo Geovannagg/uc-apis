@@ -9,6 +9,6 @@ class Aluno(Base):
     nome = Column(String(100), nullable=False)
     email = Column(String(100), unique=True, nullable=False, index=True)
     matricula = Column(String(50), nullable=False) # NUNCA 'senha' em texto puro
-    nota_final = Column(Float, nullable=False)
+    nota_final = Column(Float, default=0.0)
     ativo = Column(Boolean, default=True)
     criado_em = Column(DateTime(timezone=True), server_default=func.now())

@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
 
 from database import engine, Base, get_db
 from models   import Usuario
-from schemas  import UsuarioCreate, UsuarioPatch, UsuarioResponse, ErroResponse
+from schemas  import UsuarioCreate, UsuarioPatch, UsuarioResponse, ErroResponse, LoginRequest, TokenResponse
+from auth import criar_hash, verificar_senha, criar_token, usuario_logado
 
 Base.metadata.create_all(bind=engine)
 
@@ -13,17 +15,22 @@ app = FastAPI(
     description='Demonstração de validação avançada com Pydantic',
     version='1.0.0'
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # POST /usuarios - Cadastrar novo usuário
 # response_model=UsuarioResponse garante que a senha NUNCA vai
 # aparecer na resposta, mesmo que o objeto Usuario tenha hash_senha.
-@app.post('/usuarios',
+@app.post('/auth/registro',
           response_model=UsuarioResponse,
           status_code=201,
           responses={409: {'model': ErroResponse}})
-def criar_usuario(dados: UsuarioCreate, db: Session = Depends(get_db)):
+def registro(dados: UsuarioCreate, db: Session = Depends(get_db)):
     # Verifica email duplicado antes de tentar inserir
-    existe = db.query(Usuario).filter(Usuario.email == dados.email).first()
-    if existe:
+    if db.query(Usuario).filter(Usuario.email == dados.email).first():
         raise HTTPException(
             status_code=409,
             detail='E-mail já cadastrado'
@@ -34,55 +41,74 @@ def criar_usuario(dados: UsuarioCreate, db: Session = Depends(get_db)):
     usuario = Usuario(
         nome = dados.nome,
         email = dados.email,
-        hash_senha = dados.senha,  # substituir por hash na aula 6
+        hash_senha = criar_hash(dados.senha), # substituir por hash na aula 6
     )
     db.add(usuario)
     db.commit()
     db.refresh(usuario)
     return usuario   # FastAPI filtra pela UsuarioResponse — sem senha!
 
+@app.post('/auth/login', response_model=TokenResponse)
+def login(dados: LoginRequest, db:Session = Depends(get_db)):
+    usuario = db.query(Usuario).filter(Usuario.email == dados.email).first()
+    if not usuario or not verificar_senha(dados.senha, usuario.hash_senha):
+        raise HTTPException(status_code=401, detail="E-mail ou senha icorreto")
+    token = criar_token({"sub": usuario.email, "nome": usuario.nome})
+    return {"access_token": token, "token_type": "bearer"}
 
-# GET /usuarios - Listar todos
-@app.get('/usuarios', response_model=List[UsuarioResponse])
-def listar_usuarios(db: Session = Depends(get_db)):
-    return db.query(Usuario).filter(Usuario.ativo == True).all()
-
-
-# GET /usuarios/{id} - Buscar por ID
-@app.get('/usuarios/{usuario_id}', response_model=UsuarioResponse)
-def buscar_usuario(usuario_id: int, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-    if not usuario or not usuario.ativo:
-        raise HTTPException(status_code=404, detail='Usuário não encontrado')
-    return usuario
-
-
-# PATCH /usuarios/{id} - Atualizar parcialmente
-@app.patch('/usuarios/{usuario_id}', response_model=UsuarioResponse)
-def atualizar_usuario(usuario_id: int, dados: UsuarioPatch,
-                       db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-    if not usuario or not usuario.ativo:
-        raise HTTPException(status_code=404, detail='Usuário não encontrado')
-
-    # Verifica email duplicado se o cliente quiser mudar o email
-    if dados.email and dados.email != usuario.email:
-        if db.query(Usuario).filter(Usuario.email == dados.email).first():
-            raise HTTPException(status_code=409, detail='E-mail já em uso')
-
-    if dados.nome  is not None: usuario.nome  = dados.nome
-    if dados.email is not None: usuario.email = dados.email
-    db.commit()
-    db.refresh(usuario)
-    return usuario
-
-
-# DELETE /usuarios/{id} - Soft delete
-@app.delete('/usuarios/{usuario_id}')
-def remover_usuario(usuario_id: int, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-    if not usuario or not usuario.ativo:
-        raise HTTPException(status_code=404, detail='Usuário não encontrado')
-    usuario.ativo = False
-    db.commit()
-    return {'mensagem': f'Usuário {usuario_id} removido'}
+ 
+# GET /usuarios - Listar todos 
+@app.get("/meu-perfil", response_model=UsuarioResponse) 
+def meu_perfil(email: str = Depends(usuario_logado), db: Session = Depends(get_db)): 
+    usuario = db.query(Usuario).filter(Usuario.email == email).first() 
+    if not usuario: 
+        raise HTTPException(status_code=404, detail="Usuário não encontrado") 
+    return usuario 
+ 
+ 
+ 
+# GET /usuarios/{id} - Buscar por ID 
+@app.get("/usuarios", response_model=List[UsuarioResponse]) 
+def listar_usuarios(db: Session = Depends(get_db)): 
+    return db.query(Usuario).filter(Usuario.ativo == True).all() 
+ 
+ 
+# PATCH /usuarios/{id} - Atualizar parcialmente 
+@app.patch('/usuarios/{usuario_id}', response_model=UsuarioResponse) 
+def atualizar(usuario_id: int, dados: UsuarioPatch, db: Session = Depends(get_db), email: str = 
+Depends(usuario_logado),): 
+ # Busca o usuário logado 
+    atual = db.query(Usuario).filter(Usuario.email == email).first() 
+    if not atual: 
+        raise HTTPException( 
+            status_code=401, detail="Usuário logado não encontrado no banco" 
+        ) 
+ 
+    if atual.id != usuario_id: 
+        raise HTTPException(status_code=403, detail="Sem permissão") 
+ 
+ 
+ 
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first() 
+    if not usuario: 
+        raise HTTPException(status_code=404, detail='Usuário não encontrado') 
+ 
+    if dados.nome  is not None: usuario.nome  = dados.nome 
+    if dados.email is not None: usuario.email = dados.email 
+    db.commit() 
+    db.refresh(usuario) 
+    return usuario 
+ 
+ 
+# DELETE /usuarios/{id} - Soft delete 
+@app.delete('/usuarios/{usuario_id}') 
+def remover (usuario_id: int, db: Session = Depends(get_db)): 
+    atual: Usuario = Depends(usuario_logado)
+    if atual.id != usuario_id: 
+                   raise HTTPException(status_code=403, detail='Sem permissão') 
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first() 
+    if not usuario: 
+        raise HTTPException(status_code=404, detail='Usuário não encontrado') 
+    usuario.ativo = False 
+    db.commit() 
+    return {'mensagem': 'Conta desativada com sucesso'}

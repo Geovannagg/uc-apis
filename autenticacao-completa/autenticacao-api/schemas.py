@@ -2,10 +2,19 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
 
+class LoginRequest(BaseModel):
+    email: str
+    senha: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = 'bearer'
+    
 # Schema de CRIAÇÃO (POST)
 # Contém senha pois o usuário precisa enviar para se cadastrar.
 # NÃO contém id nem criado_em / o banco gera automaticamente.
 class UsuarioCreate(BaseModel):
+
     nome: str = Field(..., min_length=2, max_length=100, description='Nome completo do usuário')
     email: EmailStr = Field(..., description='Email válido') # Usando EmailStr importado
     senha: str = Field(..., min_length=8, description='Mínimo 8 caracteres')
